@@ -16,7 +16,7 @@ class BufferDecoder(videoCodec: VideoCodec) {
     private var mediaFormat: MediaFormat? = null
     private var startTs = 0L
     private val bufferInfo = BufferInfo()
-    private val mime = when (videoCodec){
+    private val mime = when (videoCodec) {
         VideoCodec.H264 -> CodecUtil.H264_MIME
         VideoCodec.H265 -> CodecUtil.H265_MIME
         VideoCodec.AV1 -> CodecUtil.AV1_MIME
@@ -75,13 +75,29 @@ class BufferDecoder(videoCodec: VideoCodec) {
         codec?.let {
             val inIndex = it.dequeueInputBuffer(10000)
             if (inIndex >= 0) {
-                val input = it.getInputBuffer(inIndex)
+                // Código compatível com todas as versões
+                val input = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                    it.getInputBuffer(inIndex)
+                } else {
+                    @Suppress("DEPRECATION")
+                    it.inputBuffers[inIndex]
+                }
                 input?.put(data)
                 it.queueInputBuffer(inIndex, 0, data.size, TimeUtils.getCurrentTimeMicro() - startTs, 0)
             }
+            
             val outIndex = it.dequeueOutputBuffer(bufferInfo, 10000)
             if (outIndex >= 0) {
-                val rawData = if (!isSurfaceMode) it.getOutputBuffer(outIndex)?.clone() else null
+                // Também adicionando verificação para getOutputBuffer
+                val rawData = if (!isSurfaceMode) {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                        it.getOutputBuffer(outIndex)?.clone()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        it.outputBuffers[outIndex]?.clone()
+                    }
+                } else null
+                
                 it.releaseOutputBuffer(outIndex, isSurfaceMode)
                 return rawData
             }
